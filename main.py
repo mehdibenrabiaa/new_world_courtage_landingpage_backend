@@ -4,6 +4,7 @@ from core.config import settings
 from core.database import Base, engine
 from models import lead  # noqa: F401 — registers models on Base before create_all
 from routers.leads import router as leads_router
+from routers.admin import router as admin_router
 
 is_dev = settings.ENVIRONMENT == "development"
 
@@ -26,6 +27,7 @@ app.add_middleware(
 Base.metadata.create_all(bind=engine)
 
 app.include_router(leads_router)
+app.include_router(admin_router)
 
 
 @app.get("/health")
