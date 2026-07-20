@@ -1,10 +1,11 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
 from core.database import get_db
+from core.notify import notify_new_lead
 from core.security import require_api_key
 from models.lead import Lead
 from models.schemas import LeadIn, LeadOut
@@ -13,7 +14,7 @@ router = APIRouter(prefix="/leads", tags=["leads"])
 
 
 @router.post("", response_model=LeadOut, status_code=201)
-def create_or_update_lead(payload: LeadIn, request: Request, db: Session = Depends(get_db)):
+def create_or_update_lead(payload: LeadIn, request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     # Upsert by lead_uid: the first call (as soon as name+phone are known)
     # creates a "partial" row; the final submit reuses the same lead_uid to
     # fill in the rest instead of creating a second row. The *current* row
@@ -21,6 +22,7 @@ def create_or_update_lead(payload: LeadIn, request: Request, db: Session = Depen
     # but every submission is also appended to `history` first — nothing a
     # later submission overwrites is ever actually lost.
     lead = db.query(Lead).filter(Lead.lead_uid == payload.lead_uid).first()
+    is_new_lead = lead is None
     if not lead:
         lead = Lead(lead_uid=payload.lead_uid, history=[])
         db.add(lead)
