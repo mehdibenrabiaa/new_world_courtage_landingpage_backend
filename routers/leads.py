@@ -1,0 +1,53 @@
+from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy.orm import Session
+
+from core.database import get_db
+from core.security import require_api_key
+from models.lead import Lead
+from models.schemas import LeadIn, LeadOut
+
+router = APIRouter(prefix="/leads", tags=["leads"])
+
+
+@router.post("", response_model=LeadOut, status_code=201)
+def create_or_update_lead(payload: LeadIn, request: Request, db: Session = Depends(get_db)):
+    # Upsert by lead_uid: the first call (as soon as name+phone are known)
+    # creates a "partial" row; the final submit reuses the same lead_uid to
+    # fill in the rest instead of creating a second row.
+    lead = db.query(Lead).filter(Lead.lead_uid == payload.lead_uid).first()
+    if not lead:
+        lead = Lead(lead_uid=payload.lead_uid)
+        db.add(lead)
+
+    lead.name = payload.name
+    lead.phone = payload.phone
+    if payload.insurance_type:
+        lead.insurance_type = payload.insurance_type
+    lead.answers = payload.answers
+    lead.source_path = payload.source_path
+    lead.referrer = payload.referrer
+    lead.user_agent = request.headers.get("user-agent")
+    lead.status = "completed" if payload.completed else "partial"
+
+    db.commit()
+    db.refresh(lead)
+    return lead
+
+
+@router.get("", response_model=list[LeadOut], dependencies=[Depends(require_api_key)])
+def list_leads(limit: int = 50, offset: int = 0, db: Session = Depends(get_db)):
+    return (
+        db.query(Lead)
+        .order_by(Lead.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+
+@router.get("/{lead_id}", response_model=LeadOut, dependencies=[Depends(require_api_key)])
+def get_lead(lead_id: int, db: Session = Depends(get_db)):
+    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    return lead
