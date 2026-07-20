@@ -13,6 +13,9 @@ class Lead(Base):
     phone = Column(String, nullable=False)
     insurance_type = Column(String, nullable=True)
     answers = Column(JSON, nullable=False, default=dict)
+    # Every submission for this lead_uid, oldest first — nothing is ever
+    # overwritten without a trace, even if a later submission replaces it.
+    history = Column(JSON, nullable=False, default=list)
     source_path = Column(String, nullable=False)
     referrer = Column(String, nullable=True)
     user_agent = Column(String, nullable=True)

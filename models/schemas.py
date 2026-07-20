@@ -21,6 +21,7 @@ class LeadOut(BaseModel):
     phone: str
     insurance_type: str | None
     answers: dict
+    history: list
     source_path: str
     referrer: str | None
     user_agent: str | None

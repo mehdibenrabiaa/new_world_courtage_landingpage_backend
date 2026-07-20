@@ -1,5 +1,8 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from core.database import get_db
 from core.security import require_api_key
@@ -13,11 +16,27 @@ router = APIRouter(prefix="/leads", tags=["leads"])
 def create_or_update_lead(payload: LeadIn, request: Request, db: Session = Depends(get_db)):
     # Upsert by lead_uid: the first call (as soon as name+phone are known)
     # creates a "partial" row; the final submit reuses the same lead_uid to
-    # fill in the rest instead of creating a second row.
+    # fill in the rest instead of creating a second row. The *current* row
+    # still reflects the latest submission (so existing reads don't change),
+    # but every submission is also appended to `history` first — nothing a
+    # later submission overwrites is ever actually lost.
     lead = db.query(Lead).filter(Lead.lead_uid == payload.lead_uid).first()
     if not lead:
-        lead = Lead(lead_uid=payload.lead_uid)
+        lead = Lead(lead_uid=payload.lead_uid, history=[])
         db.add(lead)
+
+    lead.history = [
+        *(lead.history or []),
+        {
+            "at": datetime.now(timezone.utc).isoformat(),
+            "name": payload.name,
+            "phone": payload.phone,
+            "insurance_type": payload.insurance_type,
+            "answers": payload.answers,
+            "completed": payload.completed,
+        },
+    ]
+    flag_modified(lead, "history")  # JSON columns need an explicit nudge — mutating in place isn't auto-detected
 
     lead.name = payload.name
     lead.phone = payload.phone
