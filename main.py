@@ -5,11 +5,14 @@ from core.database import Base, engine
 from models import lead  # noqa: F401 — registers models on Base before create_all
 from routers.leads import router as leads_router
 
+is_dev = settings.ENVIRONMENT == "development"
+
 app = FastAPI(
     title="New World Courtage — Landing Page API",
     version="0.1.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url="/docs" if is_dev else None,
+    redoc_url="/redoc" if is_dev else None,
+    openapi_url="/openapi.json" if is_dev else None,
 )
 
 app.add_middleware(
